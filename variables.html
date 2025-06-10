@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Изучение переменных в Python</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--tg-theme-bg-color, #f0f2f5);
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            border: 2px solid #000;
+            background-color: #1e90ff;
+        }
+        .game-container {
+            text-align: center;
+        }
+        .score {
+            color: white;
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        .lives {
+            color: white;
+            font-size: 24px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="score">Счет: <span id="score">0</span></div>
+        <div class="lives">Жизни: <span id="lives">3</span></div>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Получение canvas и контекста
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Константы
+        const BASKET_WIDTH = 150;
+        const BASKET_HEIGHT = 100;
+        const VARIABLE_WIDTH = 200;
+        const VARIABLE_HEIGHT = 50;
+        const VARIABLE_SPEED = 2;
+
+        // Класс для переменных
+        class Variable {
+            constructor() {
+                this.types = [
+                    ["name = 'Иван'", "str"],
+                    ["age = 25", "int"],
+                    ["height = 1.75", "float"],
+                    ["is_student = True", "bool"],
+                    ["numbers = [1, 2, 3]", "list"],
+                    ["person = {'name': 'Иван'}", "dict"]
+                ];
+                const randomType = this.types[Math.floor(Math.random() * this.types.length)];
+                this.text = randomType[0];
+                this.type = randomType[1];
+                this.x = Math.random() * (canvas.width - VARIABLE_WIDTH);
+                this.y = -VARIABLE_HEIGHT;
+                this.width = VARIABLE_WIDTH;
+                this.height = VARIABLE_HEIGHT;
+                this.isDragging = false;
+                this.dragOffsetX = 0;
+                this.dragOffsetY = 0;
+            }
+
+            draw() {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = 'black';
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.fillStyle = 'black';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.text, this.x + this.width/2, this.y + this.height/2);
+            }
+
+            move() {
+                if (!this.isDragging) {
+                    this.y += VARIABLE_SPEED;
+                }
+            }
+
+            isPointInside(x, y) {
+                return x >= this.x && x <= this.x + this.width &&
+                       y >= this.y && y <= this.y + this.height;
+            }
+        }
+
+        // Класс для корзин
+        class Basket {
+            constructor(x, type) {
+                this.x = x;
+                this.y = canvas.height - BASKET_HEIGHT - 20;
+                this.width = BASKET_WIDTH;
+                this.height = BASKET_HEIGHT;
+                this.type = type;
+            }
+
+            draw() {
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = 'black';
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.fillStyle = 'black';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.type, this.x + this.width/2, this.y + this.height/2);
+            }
+
+            isColliding(variable) {
+                return !(variable.x + variable.width < this.x ||
+                        variable.x > this.x + this.width ||
+                        variable.y + variable.height < this.y ||
+                        variable.y > this.y + this.height);
+            }
+        }
+
+        // Создание корзин
+        const baskets = [
+            new Basket(50, "str"),
+            new Basket(200, "int"),
+            new Basket(350, "float"),
+            new Basket(500, "bool"),
+            new Basket(650, "list")
+        ];
+
+        // Игровые переменные
+        let variables = [];
+        let score = 0;
+        let lives = 3;
+        let lastSpawnTime = 0;
+        const spawnDelay = 2000; // 2 секунды
+
+        // Обработчики событий
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            for (let variable of variables) {
+                if (variable.isPointInside(x, y)) {
+                    variable.isDragging = true;
+                    variable.dragOffsetX = x - variable.x;
+                    variable.dragOffsetY = y - variable.y;
+                    break;
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            for (let variable of variables) {
+                if (variable.isDragging) {
+                    variable.x = x - variable.dragOffsetX;
+                    variable.y = y - variable.dragOffsetY;
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            for (let variable of variables) {
+                if (variable.isDragging) {
+                    variable.isDragging = false;
+                    // Проверка попадания в корзину
+                    for (let basket of baskets) {
+                        if (basket.isColliding(variable)) {
+                            if (basket.type === variable.type) {
+                                score += 10;
+                                document.getElementById('score').textContent = score;
+                            } else {
+                                lives--;
+                                document.getElementById('lives').textContent = lives;
+                            }
+                            variables = variables.filter(v => v !== variable);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        // Игровой цикл
+        function gameLoop() {
+            // Очистка canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Создание новых переменных
+            const currentTime = Date.now();
+            if (currentTime - lastSpawnTime > spawnDelay) {
+                variables.push(new Variable());
+                lastSpawnTime = currentTime;
+            }
+
+            // Обновление и отрисовка переменных
+            for (let i = variables.length - 1; i >= 0; i--) {
+                const variable = variables[i];
+                variable.move();
+                variable.draw();
+
+                // Удаление переменных, вышедших за пределы экрана
+                if (variable.y > canvas.height) {
+                    variables.splice(i, 1);
+                    lives--;
+                    document.getElementById('lives').textContent = lives;
+                }
+            }
+
+            // Отрисовка корзин
+            for (let basket of baskets) {
+                basket.draw();
+            }
+
+            // Проверка окончания игры
+            if (lives <= 0) {
+                ctx.fillStyle = 'red';
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Игра окончена!', canvas.width/2, canvas.height/2);
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Запуск игры
+        gameLoop();
+    </script>
+</body>
+</html> 
